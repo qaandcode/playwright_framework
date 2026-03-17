@@ -1,0 +1,47 @@
+name: Nightly Full Regression
+
+on:
+  schedule:
+    - cron: '0 1 * * *'   # 01:00 UTC every night
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        default: staging
+        options: [dev, staging, prod]
+
+jobs:
+  full-regression:
+    name: Full regression — ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit, mobile-chrome, mobile-safari]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+
+      - run: npm ci
+      - run: npx playwright install --with-deps
+
+      - name: Run full suite — ${{ matrix.project }}
+        run: npx playwright test --project=${{ matrix.project }} --grep @regression
+        env:
+          TEST_ENV: ${{ github.event.inputs.environment || 'staging' }}
+          BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+          API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+          TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
+          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-${{ matrix.project }}
+          path: playwright-report/
+          retention-days: 14

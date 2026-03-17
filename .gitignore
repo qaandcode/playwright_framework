@@ -1,0 +1,37 @@
+node_modules/
+dist/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+screenshots/
+
+# Auth state — NEVER commit real session tokens
+auth/user-state.json
+auth/admin-state.json
+auth/manager-state.json
+
+# Environment files — use .env.testing as template
+.env
+.env.dev
+.env.staging
+.env.prod
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+
+# Protect .env
+.env
+.env.*
+config/.env.*
