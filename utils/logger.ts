@@ -1,44 +1,24 @@
-/**
- * Logger — lightweight structured logger for test output.
- * In CI, all output goes to stdout and is captured by the reporter.
- */
+type Level = 'debug' | 'info' | 'warn' | 'error';
+
+const LEVEL_ORDER: Record<Level, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+const CURRENT_LEVEL: Level = (process.env.LOG_LEVEL as Level) ?? 'info';
+
 export class Logger {
-  private readonly prefix: string;
-  private static readonly ENABLED = process.env.LOG_LEVEL !== 'silent';
+  constructor(private readonly context: string) {}
 
-  constructor(context: string) {
-    this.prefix = `[${context}]`;
-  }
-
-  info(message: string, data?: unknown) {
-    if (Logger.ENABLED) {
-      const extra = data ? ` ${JSON.stringify(data)}` : '';
-      process.stdout.write(`ℹ ${this.prefix} ${message}${extra}\n`);
+  private log(level: Level, msg: string, meta?: unknown): void {
+    if (LEVEL_ORDER[level] < LEVEL_ORDER[CURRENT_LEVEL]) return;
+    const ts = new Date().toISOString();
+    const base = `[${ts}] [${level.toUpperCase()}] [${this.context}] ${msg}`;
+    if (meta !== undefined) {
+      console[level === 'debug' ? 'log' : level](base, meta);
+    } else {
+      console[level === 'debug' ? 'log' : level](base);
     }
   }
 
-  debug(message: string, data?: unknown) {
-    if (process.env.LOG_LEVEL === 'debug') {
-      const extra = data ? ` ${JSON.stringify(data)}` : '';
-      process.stdout.write(`🐛 ${this.prefix} ${message}${extra}\n`);
-    }
-  }
-
-  warn(message: string, data?: unknown) {
-    if (Logger.ENABLED) {
-      const extra = data ? ` ${JSON.stringify(data)}` : '';
-      process.stderr.write(`⚠ ${this.prefix} ${message}${extra}\n`);
-    }
-  }
-
-  error(message: string, error?: unknown) {
-    const detail = error instanceof Error ? ` ${error.message}` : error ? ` ${JSON.stringify(error)}` : '';
-    process.stderr.write(`✖ ${this.prefix} ${message}${detail}\n`);
-  }
-
-  step(message: string) {
-    if (Logger.ENABLED) {
-      process.stdout.write(`→ ${this.prefix} ${message}\n`);
-    }
-  }
+  debug(msg: string, meta?: unknown) { this.log('debug', msg, meta); }
+  info(msg: string, meta?: unknown)  { this.log('info',  msg, meta); }
+  warn(msg: string, meta?: unknown)  { this.log('warn',  msg, meta); }
+  error(msg: string, meta?: unknown) { this.log('error', msg, meta); }
 }

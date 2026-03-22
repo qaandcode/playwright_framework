@@ -1,60 +1,38 @@
 import { type Page } from '@playwright/test';
 import { BasePage } from './base.page';
 
-/**
- * LoginPage — covers the sign-in screen.
- * Swap selectors to match your app; logic stays unchanged.
- */
 export class LoginPage extends BasePage {
-  // ── Selectors ───────────────────────────────────────────────────────────────
-  private readonly emailInput = '[data-testid="email"], input[name="email"], #email';
-  private readonly passwordInput = '[data-testid="password"], input[name="password"], #password';
-  private readonly submitButton = '[data-testid="login-btn"], button[type="submit"]';
-  private readonly errorMessage = '[data-testid="error-msg"], .error-message, [role="alert"]';
-  private readonly forgotPasswordLink = 'a[href*="forgot"], [data-testid="forgot-password"]';
+  // Selectors — update to match your app
+  private readonly emailInput    = '#email, [data-testid="email-input"], input[name="email"]';
+  private readonly passwordInput = '[data-testid="password-input"], input[name="password"], #password';
+  private readonly submitButton  = '[data-testid="login-button"], button[type="submit"]';
+  private readonly errorMessage  = '[data-testid="login-error"], .error-message, [role="alert"]';
 
   constructor(page: Page) {
     super(page);
   }
 
-  // ── Actions ─────────────────────────────────────────────────────────────────
-
-  async goto() {
+  async goto(): Promise<void> {
     await this.navigate('/login');
   }
 
-  async login(email: string, password: string) {
-    this.logger.info(`Logging in as: ${email}`);
+  async login(email: string, password: string): Promise<void> {
+    this.logger.info(`Logging in as ${email}`);
     await this.fill(this.emailInput, email);
     await this.fill(this.passwordInput, password);
     await this.click(this.submitButton);
   }
 
-  async loginAndWaitForRedirect(email: string, password: string, redirectPath = '/dashboard') {
+  async loginAndWait(email: string, password: string): Promise<void> {
     await this.login(email, password);
-    await this.page.waitForURL(`**${redirectPath}`, { timeout: 15_000 });
+    await this.waitForNavigation(/dashboard|home|\/app/);
   }
 
-  async getErrorMessage(): Promise<string | null> {
-    const isVisible = await this.isVisible(this.errorMessage);
-    if (!isVisible) return null;
+  async getErrorMessage(): Promise<string> {
     return this.page.locator(this.errorMessage).innerText();
   }
 
-  async clickForgotPassword() {
-    await this.click(this.forgotPasswordLink);
-  }
-
-  // ── Assertions ──────────────────────────────────────────────────────────────
-
-  async assertLoginPageLoaded() {
-    await this.assertVisible(this.emailInput);
-    await this.assertVisible(this.passwordInput);
-    await this.assertVisible(this.submitButton);
-  }
-
-  async assertErrorVisible(message?: string) {
+  async assertErrorVisible(): Promise<void> {
     await this.assertVisible(this.errorMessage);
-    if (message) await this.assertText(this.errorMessage, message);
   }
 }

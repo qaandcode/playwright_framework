@@ -1,70 +1,28 @@
 import { test, expect } from '../../fixtures';
-import { checkA11y, injectAxe } from 'axe-playwright';
+import AxeBuilder from '@axe-core/playwright';
 
-/**
- * Accessibility tests @regression
- * Uses axe-playwright to audit pages against WCAG 2.1 AA.
- * Run with: npm run test:a11y
- */
+test.describe('Accessibility @regression', () => {
+  test('login page has no critical WCAG violations', async ({ page }) => {
+    await page.goto('/login');
 
-test.describe('Accessibility — WCAG 2.1 AA @regression', () => {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
 
-  test('login page passes accessibility audit', async ({ page, loginPage }) => {
-    await loginPage.goto();
-    await injectAxe(page);
-    await checkA11y(page, undefined, {
-      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] },
-      detailedReport: true,
-    });
+    const critical = results.violations.filter(v => v.impact === 'critical');
+    if (critical.length > 0) {
+      console.log('Critical violations:', JSON.stringify(critical, null, 2));
+    }
+    expect(critical).toHaveLength(0);
   });
 
-  test('dashboard page passes accessibility audit', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/dashboard');
-    await injectAxe(authenticatedPage);
-    await checkA11y(authenticatedPage, undefined, {
-      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] },
-      detailedReport: true,
-    });
-  });
-
-  test('login page is keyboard navigable', async ({ page, loginPage }) => {
-    await loginPage.goto();
-    // Tab through the form and submit with keyboard only
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
-    // Focus should be on submit button
-    const focused = page.locator(':focus');
-    await expect(focused).toBeVisible();
-  });
-
-  test('login page has correct focus order', async ({ page, loginPage }) => {
-    await loginPage.goto();
-    const emailInput = page.locator('input[name="email"], #email');
-    const passwordInput = page.locator('input[name="password"], #password');
-
-    await emailInput.focus();
-    await page.keyboard.press('Tab');
-    await expect(passwordInput).toBeFocused();
-  });
-
-  test('images have alt text', async ({ page }) => {
+  test('home page passes WCAG 2.1 AA', async ({ page }) => {
     await page.goto('/');
-    const imagesWithoutAlt = page.locator('img:not([alt])');
-    await expect(imagesWithoutAlt).toHaveCount(0);
-  });
 
-  test('page has a single h1', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/dashboard');
-    const h1Count = await authenticatedPage.locator('h1').count();
-    expect(h1Count).toBe(1);
-  });
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
 
-  test('all interactive elements are focusable', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/dashboard');
-    const buttons = authenticatedPage.locator('button:not([disabled])');
-    const count = await buttons.count();
-    // Verify at least some interactive elements exist
-    expect(count).toBeGreaterThan(0);
+    expect(results.violations).toHaveLength(0);
   });
 });

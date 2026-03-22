@@ -1,48 +1,39 @@
 {
   "name": "playwright-enterprise-framework",
   "version": "1.0.0",
-  "description": "Enterprise-grade Playwright + TypeScript automation framework",
+  "description": "Production-grade E2E automation framework with Playwright + TypeScript",
   "scripts": {
     "test": "playwright test",
     "test:smoke": "playwright test --grep @smoke",
     "test:regression": "playwright test --grep @regression",
     "test:api": "playwright test --project=api",
-    "test:visual": "playwright test --project=visual",
     "test:a11y": "playwright test tests/accessibility",
+    "test:visual": "playwright test --project=visual",
     "test:dev": "TEST_ENV=dev playwright test",
     "test:staging": "TEST_ENV=staging playwright test",
     "test:prod": "TEST_ENV=prod playwright test --grep @smoke",
     "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug",
     "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
     "report": "playwright show-report",
-    "report:allure": "allure generate allure-results --clean && allure open",
-    "lint": "eslint . --ext .ts --fix",
-    "format": "prettier --write \"**/*.ts\"",
+    "report:allure": "allure serve allure-results",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky install",
-    "clean": "rm -rf playwright-report test-results allure-results screenshots"
+    "setup": "bash scripts/setup.sh dev",
+    "install:browsers": "playwright install --with-deps"
   },
   "devDependencies": {
-    "@faker-js/faker": "^8.4.0",
-    "@playwright/test": "^1.58.2",
-    "@types/node": "^20.12.0",
-    "@typescript-eslint/eslint-plugin": "^7.7.0",
-    "@typescript-eslint/parser": "^7.7.0",
-    "allure-playwright": "^2.14.0",
-    "axe-playwright": "^2.0.0",
-    "dotenv": "^16.4.0",
+    "@axe-core/playwright": "^4.11.1",
+    "@faker-js/faker": "^8.4.1",
+    "@playwright/test": "^1.44.0",
+    "@types/node": "^20.14.2",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "dotenv": "^16.4.5",
     "eslint": "^8.57.0",
-    "eslint-plugin-playwright": "^1.6.0",
-    "husky": "^9.0.0",
-    "lint-staged": "^15.2.0",
-    "prettier": "^3.2.0",
-    "typescript": "^5.4.0"
-  },
-  "lint-staged": {
-    "*.ts": [
-      "eslint --fix",
-      "prettier --write"
-    ]
+    "prettier": "^3.3.2",
+    "typescript": "^5.4.5"
   }
 }

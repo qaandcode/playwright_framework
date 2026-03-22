@@ -1,55 +1,30 @@
 import { type Page, type Locator, expect } from '@playwright/test';
 
-/**
- * ModalComponent — wraps any dialog/modal in the app.
- */
 export class ModalComponent {
-  private readonly modal: Locator;
+  private readonly root: Locator;
+  private readonly closeBtn: Locator;
+  private readonly confirmBtn: Locator;
+  private readonly cancelBtn: Locator;
+  private readonly title: Locator;
 
-  constructor(
-    private readonly page: Page,
-    private readonly modalSelector = '[role="dialog"], .modal, [data-testid="modal"]'
-  ) {
-    this.modal = page.locator(modalSelector).first();
+  constructor(page: Page, rootSelector = '[data-testid="modal"], [role="dialog"]') {
+    this.root       = page.locator(rootSelector).first();
+    this.closeBtn   = this.root.locator('[data-testid="modal-close"], [aria-label="Close"]');
+    this.confirmBtn = this.root.locator('[data-testid="modal-confirm"], button:has-text("Confirm"), button:has-text("OK")');
+    this.cancelBtn  = this.root.locator('[data-testid="modal-cancel"], button:has-text("Cancel")');
+    this.title      = this.root.locator('[data-testid="modal-title"], h2, h3');
   }
 
-  async waitForOpen(timeout = 10_000) {
-    await this.modal.waitFor({ state: 'visible', timeout });
-  }
+  async assertVisible(): Promise<void>  { await expect(this.root).toBeVisible(); }
+  async assertHidden(): Promise<void>   { await expect(this.root).toBeHidden(); }
 
-  async waitForClose(timeout = 10_000) {
-    await this.modal.waitFor({ state: 'hidden', timeout });
-  }
+  async getTitle(): Promise<string>     { return this.title.innerText(); }
 
-  async getTitle(): Promise<string> {
-    return this.modal.locator('h1, h2, h3, [data-testid="modal-title"]').innerText();
-  }
+  async close(): Promise<void>          { await this.closeBtn.click(); }
+  async confirm(): Promise<void>        { await this.confirmBtn.click(); }
+  async cancel(): Promise<void>         { await this.cancelBtn.click(); }
 
-  async clickConfirm() {
-    await this.modal.locator('button:has-text("Confirm"), button:has-text("OK"), button:has-text("Yes"), [data-testid="confirm-btn"]').click();
-  }
-
-  async clickCancel() {
-    await this.modal.locator('button:has-text("Cancel"), button:has-text("No"), [data-testid="cancel-btn"]').click();
-  }
-
-  async clickClose() {
-    await this.modal.locator('[aria-label="Close"], button:has-text("Close"), .modal-close').click();
-  }
-
-  async dismissWithEscape() {
-    await this.page.keyboard.press('Escape');
-  }
-
-  async assertOpen() {
-    await expect(this.modal).toBeVisible();
-  }
-
-  async assertClosed() {
-    await expect(this.modal).toBeHidden();
-  }
-
-  async assertTitle(text: string | RegExp) {
-    await expect(this.modal.locator('h1, h2, h3, [data-testid="modal-title"]')).toContainText(text);
+  async assertTitle(expected: string): Promise<void> {
+    await expect(this.title).toContainText(expected);
   }
 }

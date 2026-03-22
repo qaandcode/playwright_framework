@@ -1,87 +1,62 @@
-import type {
-  Reporter,
-  FullConfig,
-  Suite,
-  TestResult,
-  FullResult,
-} from '@playwright/test/reporter';
-import type { TestSummary } from '../types';
+import { Logger } from './logger';
+import { env } from './env';
 
-/**
- * SlackReporter — posts a pass/fail summary to a Slack channel after the run.
- * Set SLACK_WEBHOOK_URL in your environment to activate.
- */
-export default class SlackReporter implements Reporter {
-  private startTime = Date.now();
-  private summary: TestSummary = {
-    total: 0, passed: 0, failed: 0, skipped: 0,
-    duration: 0, environment: process.env.TEST_ENV || 'dev',
-    branch: process.env.GITHUB_REF_NAME,
-    runUrl: process.env.GITHUB_SERVER_URL
-      ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
-      : undefined,
-  };
+interface SlackBlock {
+  type: string;
+  text?: { type: string; text: string };
+}
 
-  onBegin(_config: FullConfig, suite: Suite) {
-    this.summary.total = suite.allTests().length;
-    this.startTime = Date.now();
-  }
+export class SlackReporter {
+  private readonly logger = new Logger('SlackReporter');
 
-  onTestEnd(_test: unknown, result: TestResult) {
-    if (result.status === 'passed')  this.summary.passed++;
-    if (result.status === 'failed')  this.summary.failed++;
-    if (result.status === 'skipped') this.summary.skipped++;
-  }
+  async notify(payload: {
+    title: string;
+    status: 'passed' | 'failed' | 'partial';
+    total: number;
+    passed: number;
+    failed: number;
+    duration: string;
+    runUrl?: string;
+  }): Promise<void> {
+    const webhook = env.slackWebhook;
+    if (!webhook) {
+      this.logger.debug('SLACK_WEBHOOK_URL not set — skipping Slack notification');
+      return;
+    }
 
-  async onEnd(result: FullResult) {
-    this.summary.duration = Math.round((Date.now() - this.startTime) / 1000);
-    const webhook = process.env.SLACK_WEBHOOK_URL;
-    if (!webhook) return;
+    const emoji = payload.status === 'passed' ? '✅' : payload.status === 'partial' ? '⚠️' : '❌';
+    const color = payload.status === 'passed' ? '#36a64f' : payload.status === 'partial' ? '#ff9800' : '#e01e5a';
 
-    const status = result.status === 'passed' ? '✅ Passed' : '❌ Failed';
-    const emoji  = result.status === 'passed' ? ':white_check_mark:' : ':x:';
-    const envLabel = this.summary.environment.toUpperCase();
-    const dur = `${Math.floor(this.summary.duration / 60)}m ${this.summary.duration % 60}s`;
-
-    const body = {
-      text: `${emoji} *E2E Test Run — ${envLabel}*`,
-      blocks: [
-        {
-          type: 'header',
-          text: { type: 'plain_text', text: `${status} — ${envLabel}` },
+    const blocks: SlackBlock[] = [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: `${emoji} ${payload.title}` },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `*Status:* ${payload.status.toUpperCase()}`,
+            `*Tests:* ${payload.passed}/${payload.total} passed`,
+            `*Failed:* ${payload.failed}`,
+            `*Duration:* ${payload.duration}`,
+            payload.runUrl ? `*Report:* <${payload.runUrl}|View Report>` : '',
+          ].filter(Boolean).join('\n'),
         },
-        {
-          type: 'section',
-          fields: [
-            { type: 'mrkdwn', text: `*Total:*\n${this.summary.total}` },
-            { type: 'mrkdwn', text: `*Passed:*\n${this.summary.passed}` },
-            { type: 'mrkdwn', text: `*Failed:*\n${this.summary.failed}` },
-            { type: 'mrkdwn', text: `*Skipped:*\n${this.summary.skipped}` },
-            { type: 'mrkdwn', text: `*Duration:*\n${dur}` },
-            { type: 'mrkdwn', text: `*Branch:*\n${this.summary.branch || 'local'}` },
-          ],
-        },
-        ...(this.summary.runUrl
-          ? [{
-              type: 'actions',
-              elements: [{
-                type: 'button',
-                text: { type: 'plain_text', text: 'View Run' },
-                url: this.summary.runUrl,
-              }],
-            }]
-          : []),
-      ],
-    };
+      },
+    ];
 
     try {
-      await fetch(webhook, {
+      const res = await fetch(webhook, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ blocks, attachments: [{ color }] }),
       });
+      if (!res.ok) this.logger.warn(`Slack notification failed: ${res.status}`);
+      else this.logger.info('Slack notification sent');
     } catch (err) {
-      process.stderr.write(`[SlackReporter] Failed to send notification: ${err}\n`);
+      this.logger.error('Slack notification error', err);
     }
   }
 }

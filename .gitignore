@@ -1,37 +1,32 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+
+# Playwright outputs
 playwright-report/
 test-results/
 allure-results/
 allure-report/
-screenshots/
 
-# Auth state — NEVER commit real session tokens
-auth/user-state.json
-auth/admin-state.json
-auth/manager-state.json
+# Auth state — contains session tokens, never commit
+auth/*.json
+!auth/.gitkeep
 
-# Environment files — use .env.testing as template
+# Environment files — contain secrets, never commit
+config/.env.dev
+config/.env.staging
+config/.env.prod
 .env
-.env.dev
-.env.staging
-.env.prod
 .env.local
 
-# OS
+# OS / editor
 .DS_Store
 Thumbs.db
-
-# Editor
 .vscode/settings.json
-.idea/
 *.swp
 
 # Logs
 *.log
 npm-debug.log*
-
-# Protect .env
-.env
-.env.*
-config/.env.*

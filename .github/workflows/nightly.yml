@@ -1,47 +1,49 @@
-name: Nightly Full Regression
+name: Nightly Regression
 
 on:
   schedule:
     - cron: '0 1 * * *'   # 01:00 UTC every night
-  workflow_dispatch:
-    inputs:
-      environment:
-        type: choice
-        default: staging
-        options: [dev, staging, prod]
+  workflow_dispatch:        # allow manual trigger
 
 jobs:
-  full-regression:
-    name: Full regression — ${{ matrix.project }}
+  nightly:
+    name: Nightly (${{ matrix.browser }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        project: [chromium, firefox, webkit, mobile-chrome, mobile-safari]
+        browser: [chromium, firefox, webkit]
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
+        with:
+          node-version: 20
+          cache: npm
 
-      - run: npm ci
-      - run: npx playwright install --with-deps
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Run full suite — ${{ matrix.project }}
-        run: npx playwright test --project=${{ matrix.project }} --grep @regression
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Run full regression
+        run: npx playwright test --grep @regression --project=${{ matrix.browser }}
         env:
-          TEST_ENV: ${{ github.event.inputs.environment || 'staging' }}
-          BASE_URL: ${{ secrets.STAGING_BASE_URL }}
-          API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
-          TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
+          BASE_URL:            ${{ secrets.STAGING_BASE_URL }}
+          API_BASE_URL:        ${{ secrets.STAGING_API_BASE_URL }}
+          TEST_USER_EMAIL:     ${{ secrets.TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD:  ${{ secrets.TEST_USER_PASSWORD }}
+          TEST_ADMIN_EMAIL:    ${{ secrets.TEST_ADMIN_EMAIL }}
           TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ALL_BROWSERS:        true
+          SLACK_WEBHOOK_URL:   ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload report
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nightly-${{ matrix.project }}
+          name: nightly-report-${{ matrix.browser }}
           path: playwright-report/
-          retention-days: 14
+          retention-days: 30

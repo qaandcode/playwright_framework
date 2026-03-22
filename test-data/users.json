@@ -1,36 +1,22 @@
 {
-  "roles": {
-    "user": {
-      "email": "testuser@testmail.example.com",
-      "password": "TestUser123!",
-      "name": "Test User",
+  "users": [
+    {
+      "id": "user-001",
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "lastName": "Smith",
       "role": "user"
     },
-    "admin": {
-      "email": "testadmin@testmail.example.com",
-      "password": "TestAdmin123!",
-      "name": "Test Admin",
+    {
+      "id": "user-002",
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "lastName": "Jones",
       "role": "admin"
-    },
-    "viewer": {
-      "email": "testviewer@testmail.example.com",
-      "password": "TestViewer123!",
-      "name": "Test Viewer",
-      "role": "viewer"
     }
-  },
-  "invalid": {
-    "wrongPassword": {
-      "email": "testuser@testmail.example.com",
-      "password": "WrongPassword999!"
-    },
-    "nonExistent": {
-      "email": "nobody@nowhere.com",
-      "password": "NoSuchUser123!"
-    },
-    "malformedEmail": {
-      "email": "not-an-email",
-      "password": "Password123!"
-    }
-  }
+  ],
+  "invalidCredentials": [
+    { "email": "notexist@example.com", "password": "WrongPass1!" },
+    { "email": "alice@example.com",    "password": "BadPassword99!" }
+  ]
 }

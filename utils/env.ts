@@ -1,53 +1,71 @@
-import type { Environment, EnvironmentConfig } from '../types';
-
 /**
  * env — typed, validated environment config accessor.
- * Throws a clear error at startup if a required variable is missing,
- * rather than silently failing mid-test.
+ *
+ * All properties are getters so they read process.env AFTER
+ * playwright.config.ts has loaded the .env file. Plain properties
+ * evaluated at import time would always capture undefined.
  */
 
-function require(key: string): string {
+type Environment = 'dev' | 'staging' | 'prod';
+
+interface EnvironmentConfig {
+  baseUrl: string;
+  apiBaseUrl: string;
+  env: Environment;
+}
+
+const TEST_ENV = process.env.TEST_ENV || 'dev';
+
+function required(key: string): string {
   const value = process.env[key];
   if (!value) {
-    throw new Error(`Missing required environment variable: ${key}\nCheck your config/.env.${process.env.TEST_ENV || 'dev'} file.`);
+    throw new Error(
+      `Missing required environment variable: ${key}\n` +
+      `Check your config/.env.${TEST_ENV} file.\n` +
+      `Copy config/.env.dev → config/.env.${TEST_ENV} and fill in real values.`
+    );
   }
   return value;
 }
 
 function optional(key: string, fallback = ''): string {
-  return process.env[key] || fallback;
+  return process.env[key] ?? fallback;
 }
 
 export const env = {
-  // ── App ─────────────────────────────────────────────────────────────────────
-  get baseUrl(): string   { return require('BASE_URL'); },
-  get apiBaseUrl(): string { return optional('API_BASE_URL', process.env.BASE_URL || ''); },
-  get environment(): Environment {
-    return (process.env.TEST_ENV || 'dev') as Environment;
+  // ── URLs ──────────────────────────────────────────────────────────────────
+  get baseUrl(): string {
+    return optional('BASE_URL', 'http://bonzo.knowledgeplatform.com');
+  },
+  get apiBaseUrl(): string {
+    return optional('API_BASE_URL', optional('BASE_URL', 'http://bonzoapi.knowledgeplatform.com'));
   },
 
-  // ── Auth ─────────────────────────────────────────────────────────────────────
-  get userEmail(): string    { return require('TEST_USER_EMAIL'); },
-  get userPassword(): string { return require('TEST_USER_PASSWORD'); },
-  get adminEmail(): string   { return optional('TEST_ADMIN_EMAIL'); },
-  get adminPassword(): string { return optional('TEST_ADMIN_PASSWORD'); },
+  // ── User credentials ──────────────────────────────────────────────────────
+  get userEmail(): string    { return required('TEST_USER_EMAIL'); },
+  get userPassword(): string { return required('TEST_USER_PASSWORD'); },
 
-  // ── Notifications ────────────────────────────────────────────────────────────
+  // ── Admin credentials (optional) ──────────────────────────────────────────
+  get adminEmail(): string    { return optional('TEST_ADMIN_EMAIL'); },
+  get adminPassword(): string { return optional('TEST_ADMIN_PASSWORD'); },
+  get hasAdminCreds(): boolean {
+    return Boolean(process.env.TEST_ADMIN_EMAIL && process.env.TEST_ADMIN_PASSWORD);
+  },
+
+  // ── Notifications ─────────────────────────────────────────────────────────
   get slackWebhook(): string { return optional('SLACK_WEBHOOK_URL'); },
 
-  // ── Feature flags ────────────────────────────────────────────────────────────
-  get visualTestingEnabled(): boolean { return process.env.VISUAL_TESTING_ENABLED === 'true'; },
-  get a11yTestingEnabled(): boolean   { return process.env.ACCESSIBILITY_TESTING_ENABLED !== 'false'; },
+  // ── Meta ──────────────────────────────────────────────────────────────────
+  get testEnv(): Environment { return TEST_ENV as Environment; },
+  get isCI(): boolean        { return !!process.env.CI; },
+  get isLocal(): boolean     { return !process.env.CI; },
 
-  // ── Composed config ──────────────────────────────────────────────────────────
+  // ── Composed config ───────────────────────────────────────────────────────
   get config(): EnvironmentConfig {
     return {
-      baseUrl: this.baseUrl,
+      baseUrl:    this.baseUrl,
       apiBaseUrl: this.apiBaseUrl,
-      env: this.environment,
+      env:        this.testEnv,
     };
   },
-
-  isCI: !!process.env.CI,
-  isLocal: !process.env.CI,
 };

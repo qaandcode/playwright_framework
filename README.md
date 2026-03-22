@@ -9,33 +9,33 @@ Designed to plug into any web application with minimal configuration.
 
 ```
 playwright-enterprise/
-├── .github/workflows/      # CI/CD pipelines (ci, nightly, release)
+├── .github/workflows/          # CI/CD pipelines (ci, nightly, release)
 ├── tests/
-│   ├── e2e/                # User journey tests   @regression
-│   ├── api/                # API contract tests   @regression
-│   ├── visual/             # Screenshot regression @visual
-│   ├── accessibility/      # WCAG 2.1 AA audits   @regression
-│   ├── smoke/              # Critical path (<5m)  @smoke
-│   └── global-setup.ts     # Auth state generation
+│   ├── e2e/                    # User journey tests        @regression
+│   ├── api/                    # API contract tests        @regression
+│   ├── visual/                 # Screenshot regression     @visual
+│   ├── accessibility/          # WCAG 2.1 AA audits        @regression
+│   ├── smoke/                  # Critical path (<5 min)    @smoke
+│   └── global-setup.ts         # Auth state generation
 ├── pages/
-│   ├── base.page.ts        # BasePage - all POMs extend this
+│   ├── base.page.ts            # BasePage — all POMs extend this
 │   ├── login.page.ts
 │   ├── dashboard.page.ts
-│   └── components/         # Reusable UI components (table, modal)
+│   └── components/             # Reusable UI components (table, modal)
 ├── fixtures/
-│   └── index.ts            # Extended test() with auth & API fixtures
+│   └── index.ts                # Extended test() with auth & API fixtures
 ├── utils/
-│   ├── api-client.ts       # Typed API wrapper
-│   ├── data-factory.ts     # Faker-based test data generation
-│   ├── env.ts              # Validated environment accessor
-│   ├── logger.ts           # Structured test logger
-│   └── slack-reporter.ts   # CI failure notifications
-├── test-data/              # Static JSON fixtures
+│   ├── api-client.ts           # Typed API wrapper
+│   ├── data-factory.ts         # Faker-based test data generation
+│   ├── env.ts                  # Validated environment accessor
+│   ├── logger.ts               # Structured test logger
+│   └── slack-reporter.ts       # CI failure notifications
+├── test-data/                  # Static JSON fixtures
 ├── config/
-│   └── .env.example        # Template - never commit real values
+│   └── .env.example            # Template — never commit real values
 ├── types/
-│   └── index.ts            # Shared TypeScript interfaces
-└── auth/                   # Gitignored session storage
+│   └── index.ts                # Shared TypeScript interfaces
+└── auth/                       # Gitignored session storage
 ```
 
 ---
@@ -44,19 +44,38 @@ playwright-enterprise/
 
 ```bash
 # 1. Clone and run one-time setup
-git clone <your-repo>
-cd playwright-enterprise
+git clone https://github.com/qaandcode/playwright_framework
+cd playwright-framework
 bash scripts/setup.sh dev
 
 # 2. Configure your environment
 cp config/.env.example config/.env.dev
 # Edit config/.env.dev with your BASE_URL and credentials
 
-# 3. Run smoke tests (5 min)
+# 3. Run smoke tests (~5 min)
 npm run test:smoke
 
 # 4. Run full regression
 npm test
+```
+
+---
+
+## ⚠️ First-Time Configuration (Required)
+
+The framework needs a `.env.dev` file before tests can run. Without it, tests that require authentication or a live API will skip gracefully rather than crashing.
+
+```bash
+cp config/.env.example config/.env.dev
+```
+
+Then open `config/.env.dev` and fill in:
+
+```env
+BASE_URL=https://your-app.com
+API_BASE_URL=https://your-app.com/api
+TEST_USER_EMAIL=testuser@your-app.com
+TEST_USER_PASSWORD=YourPassword123!
 ```
 
 ---
@@ -81,20 +100,19 @@ npm test
 
 ## Writing Tests
 
-### Import the extended test object — always use fixtures, never base `@playwright/test`
+Always import from `../../fixtures`, never from `@playwright/test` directly:
 
 ```typescript
 import { test, expect } from '../../fixtures';
 
 test('user can view their profile @regression', async ({ authenticatedPage, factory }) => {
   const user = factory.createUser();
-  // authenticatedPage is pre-authenticated — no login boilerplate
   await authenticatedPage.goto('/profile');
   await expect(authenticatedPage.locator('h1')).toBeVisible();
 });
 ```
 
-### Available fixtures
+### Available Fixtures
 
 | Fixture | Description |
 |---|---|
@@ -111,9 +129,9 @@ test('user can view their profile @regression', async ({ authenticatedPage, fact
 
 | Tag | When to use |
 |---|---|
-| `@smoke` | Critical path - runs on every PR |
-| `@regression` | Full coverage - runs nightly |
-| `@visual` | Visual regression - runs in visual project |
+| `@smoke` | Critical path — runs on every PR |
+| `@regression` | Full coverage — runs nightly |
+| `@visual` | Visual regression — runs in visual project |
 
 ---
 
@@ -147,9 +165,9 @@ export class MyFeaturePage extends BasePage {
 
 | Workflow | Trigger | Runs |
 |---|---|---|
-| `ci.yml` | Push / PR | @smoke on PR, sharded 4x on push |
+| `ci.yml` | Push / PR | @smoke on PR, sharded 4× on push |
 | `nightly.yml` | 01:00 UTC | Full @regression across all browsers |
-| `release.yml` | Post-deploy | @smoke on prod |
+| `release.yml` | Manual dispatch | @smoke on selected environment |
 
 ### Required GitHub Secrets
 
@@ -158,20 +176,18 @@ STAGING_BASE_URL
 STAGING_API_BASE_URL
 TEST_USER_EMAIL
 TEST_USER_PASSWORD
-TEST_ADMIN_EMAIL
-TEST_ADMIN_PASSWORD
+TEST_ADMIN_EMAIL          (optional)
+TEST_ADMIN_PASSWORD       (optional)
 PROD_BASE_URL
 PROD_API_BASE_URL
-PROD_TEST_USER_EMAIL
-PROD_TEST_USER_PASSWORD
-SLACK_WEBHOOK_URL          (optional — for notifications)
+SLACK_WEBHOOK_URL         (optional — for notifications)
 ```
 
 ---
 
 ## Environment Setup
 
-Each environment has its own config file. Copy the template and fill in real values:
+Each environment has its own config file:
 
 ```bash
 cp config/.env.example config/.env.dev
@@ -191,8 +207,7 @@ TEST_ENV=prod npm run test:smoke
 
 - **HTML report**: `npm run report` (auto-opens browser)
 - **Allure report**: `npm run report:allure` (requires Allure CLI)
-- **GitHub Pages**: Published automatically from main branch CI runs
-- **Slack**: Failure notification sent to webhook after each CI run
+- **GitHub Actions**: HTML report published as artifact on every run
 
 ---
 
@@ -210,3 +225,22 @@ docker run --rm \
   -v $(pwd)/playwright-report:/app/playwright-report \
   playwright-tests npx playwright test --grep @smoke
 ```
+
+---
+
+## Troubleshooting
+
+**`Missing required environment variable`**  
+→ Create and fill `config/.env.dev` (see Quick Start above)
+
+**`Invalid URL` in api-client**  
+→ Set `API_BASE_URL` in your `.env.dev` file
+
+**`ECONNREFUSED localhost:3000`**  
+→ Either start your local app, or point `BASE_URL` at a running environment
+
+**`auth/user.json not found`**  
+→ The global setup skips auth when credentials are missing. Set `TEST_USER_EMAIL` and `TEST_USER_PASSWORD` and re-run
+
+**Tests skip instead of run**  
+→ Expected behaviour when env vars are missing. Fill in your `.env.dev` to enable them

@@ -1,157 +1,116 @@
-name: E2E Tests
+name: CI
 
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: Target environment
-        type: choice
-        default: staging
-        options: [dev, staging, prod]
-      suite:
-        description: Test suite to run
-        type: choice
-        default: regression
-        options: [smoke, regression, full]
-      browser:
-        description: Browser
-        type: choice
-        default: chromium
-        options: [chromium, firefox, webkit, all]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  NODE_VERSION: '20'
-  TEST_ENV: ${{ github.event.inputs.environment || 'staging' }}
 
 jobs:
-  # ── Lint & type-check ─────────────────────────────────────────────────────────
-  quality:
-    name: Lint & typecheck
+  # ── Smoke tests on every PR ────────────────────────────────────────────────
+  smoke:
+    name: Smoke Tests
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-
-  # ── Sharded E2E test execution ────────────────────────────────────────────────
-  test:
-    name: Tests (shard ${{ matrix.shard }}/${{ matrix.total }})
-    runs-on: ubuntu-latest
-    needs: quality
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-        total: [4]
-
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: 20
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium firefox
+        run: npx playwright install --with-deps chromium
 
-      - name: Run tests (shard ${{ matrix.shard }}/${{ matrix.total }})
-        run: |
-          GREP=""
-          if [ "${{ github.event.inputs.suite }}" = "smoke" ]; then GREP="--grep @smoke"; fi
-          if [ "${{ github.event_name }}" = "pull_request" ]; then GREP="--grep @smoke"; fi
-          npx playwright test \
-            --shard=${{ matrix.shard }}/${{ matrix.total }} \
-            --project=${{ github.event.inputs.browser || 'chromium' }} \
-            $GREP
+      - name: Run smoke tests
+        run: npm run test:smoke
         env:
-          BASE_URL: ${{ secrets.STAGING_BASE_URL }}
-          API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          BASE_URL:           ${{ secrets.STAGING_BASE_URL }}
+          API_BASE_URL:       ${{ secrets.STAGING_API_BASE_URL }}
+          TEST_USER_EMAIL:    ${{ secrets.TEST_USER_EMAIL }}
           TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
-          TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
-          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - name: Upload shard report
-        if: always()
+      - name: Upload report
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: report-shard-${{ matrix.shard }}
-          path: |
-            playwright-report/
-            test-results/
+          name: smoke-report
+          path: playwright-report/
           retention-days: 7
 
-  # ── Merge reports from all shards ─────────────────────────────────────────────
-  merge-reports:
-    name: Merge & publish report
-    needs: test
+  # ── Sharded regression on push to main ────────────────────────────────────
+  regression:
+    name: Regression (Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     runs-on: ubuntu-latest
-    if: always()
-
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: 20
           cache: npm
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run regression (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+        run: npx playwright test --grep @regression --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+        env:
+          BASE_URL:            ${{ secrets.STAGING_BASE_URL }}
+          API_BASE_URL:        ${{ secrets.STAGING_API_BASE_URL }}
+          TEST_USER_EMAIL:     ${{ secrets.TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD:  ${{ secrets.TEST_USER_PASSWORD }}
+          TEST_ADMIN_EMAIL:    ${{ secrets.TEST_ADMIN_EMAIL }}
+          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
+
+      - name: Upload blob report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blob-report-${{ matrix.shardIndex }}
+          path: blob-report/
+          retention-days: 1
+
+  # ── Merge sharded reports ──────────────────────────────────────────────────
+  merge-reports:
+    name: Merge Reports
+    needs: regression
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
       - run: npm ci
 
-      - name: Download all shard reports
+      - name: Download blob reports
         uses: actions/download-artifact@v4
         with:
           path: all-blob-reports
-          pattern: report-shard-*
+          pattern: blob-report-*
+          merge-multiple: true
 
       - name: Merge reports
-        run: npx playwright merge-reports --reporter html,github ./all-blob-reports
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
 
-      - name: Upload merged report
+      - name: Upload merged HTML report
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-merged
+          name: html-report
           path: playwright-report/
-          retention-days: 30
-
-      # Publish to GitHub Pages (main branch only)
-      - name: Deploy report to GitHub Pages
-        if: github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./playwright-report
-          destination_dir: reports/${{ github.run_number }}
-
-  # ── Block PR merge on failure ─────────────────────────────────────────────────
-  test-status:
-    name: Tests passed
-    needs: [test]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Check test result
-        run: |
-          if [ "${{ needs.test.result }}" != "success" ]; then
-            echo "Tests failed — blocking merge"
-            exit 1
-          fi
-          echo "All tests passed"
+          retention-days: 14

@@ -1,37 +1,29 @@
-import { test as base, type Page, type APIRequestContext } from '@playwright/test';
-import { LoginPage } from '../pages/login.page';
+import { test as base, type BrowserContext, request as playwrightRequest } from '@playwright/test';
+import { LoginPage }     from '../pages/login.page';
 import { DashboardPage } from '../pages/dashboard.page';
-import { ApiClient } from '../utils/api-client';
-import { DataFactory } from '../utils/data-factory';
-import { Logger } from '../utils/logger';
-import { env } from '../utils/env';
-import type { User } from '../types';
+import { ApiClient }     from '../utils/api-client';
+import { DataFactory }   from '../utils/data-factory';
+import { env }           from '../utils/env';
+import { Logger }        from '../utils/logger';
+import type { User }     from '../types';
 
 const logger = new Logger('Fixtures');
 
-// ── Fixture type declarations ─────────────────────────────────────────────────
-type PageFixtures = {
-  loginPage: LoginPage;
-  dashboardPage: DashboardPage;
+// ── Fixture types ─────────────────────────────────────────────────────────────
+type Fixtures = {
+  loginPage:         LoginPage;
+  dashboardPage:     DashboardPage;
+  authenticatedPage: import('@playwright/test').Page;
+  adminPage:         import('@playwright/test').Page;
+  apiClient:         ApiClient;
+  authedApiClient:   ApiClient;
+  factory:           DataFactory;
+  testUser:          User;
 };
 
-type AuthFixtures = {
-  authenticatedPage: Page;
-  adminPage: Page;
-  apiClient: ApiClient;
-  authedApiClient: ApiClient;
-  testUser: User;
-};
-
-type DataFixtures = {
-  factory: typeof DataFactory;
-};
-
-// ── Extend base test ──────────────────────────────────────────────────────────
-export const test = base.extend<PageFixtures & AuthFixtures & DataFixtures>({
-
-  // ── Page Object fixtures ───────────────────────────────────────────────────
-
+// ── Extended test ─────────────────────────────────────────────────────────────
+export const test = base.extend<Fixtures>({
+  // ── Page Object Models ──────────────────────────────────────────────────────
   loginPage: async ({ page }, use) => {
     await use(new LoginPage(page));
   },
@@ -40,68 +32,76 @@ export const test = base.extend<PageFixtures & AuthFixtures & DataFixtures>({
     await use(new DashboardPage(page));
   },
 
-  // ── Auth fixtures ──────────────────────────────────────────────────────────
-
-  /**
-   * authenticatedPage — browser context pre-loaded with saved user session.
-   * Zero login overhead per test that uses this fixture.
-   */
+  // ── Authenticated page (user) ───────────────────────────────────────────────
   authenticatedPage: async ({ browser }, use) => {
-    logger.info('Creating authenticated user context');
-    const context = await browser.newContext({
-      storageState: 'auth/user-state.json',
-    });
+    let context: BrowserContext;
+    try {
+      context = await browser.newContext({ storageState: 'auth/user.json' });
+    } catch {
+      logger.warn('auth/user.json not found — creating unauthenticated context');
+      context = await browser.newContext();
+    }
     const page = await context.newPage();
     await use(page);
     await context.close();
   },
 
-  /**
-   * adminPage - browser context pre-loaded with saved admin session.
-   */
+  // ── Authenticated page (admin) ──────────────────────────────────────────────
   adminPage: async ({ browser }, use) => {
-    logger.info('Creating admin context');
-    const context = await browser.newContext({
-      storageState: 'auth/admin-state.json',
-    });
+    if (!env.hasAdminCreds()) {
+      logger.warn('Admin credentials not set — skipping adminPage fixture');
+      const context = await browser.newContext();
+      await use(await context.newPage());
+      await context.close();
+      return;
+    }
+    let context: BrowserContext;
+    try {
+      context = await browser.newContext({ storageState: 'auth/admin.json' });
+    } catch {
+      logger.warn('auth/admin.json not found — creating unauthenticated context');
+      context = await browser.newContext();
+    }
     const page = await context.newPage();
     await use(page);
     await context.close();
   },
 
-  // ── API fixtures ───────────────────────────────────────────────────────────
-
-  /**
-   * apiClient — unauthenticated API client. Good for public endpoint tests.
-   */
-  apiClient: async ({ request }, use) => {
-    await use(new ApiClient(request));
+  // ── Unauthenticated API client ──────────────────────────────────────────────
+  apiClient: async ({}, use) => {
+    const ctx = await playwrightRequest.newContext({ baseURL: env.apiBaseUrl });
+    await use(new ApiClient(ctx, env.apiBaseUrl));
+    await ctx.dispose();
   },
 
-  /**
-   * authedApiClient — API client pre-authenticated as the test user.
-   * Use for seeding data before UI tests, or pure API contract tests.
-   */
-  authedApiClient: async ({ request }, use) => {
-    const client = new ApiClient(request);
-    await client.login(env.userEmail, env.userPassword);
-    await use(client);
+  // ── Authenticated API client ────────────────────────────────────────────────
+  authedApiClient: async ({}, use) => {
+    const email    = env.userEmail();
+    const password = env.userPassword();
+    const ctx      = await playwrightRequest.newContext({ baseURL: env.apiBaseUrl });
+    const tempClient = new ApiClient(ctx, env.apiBaseUrl);
+
+    let token = '';
+    try {
+      const res = await tempClient.post<{ token: string }>('/auth/login', { email, password });
+      token = res.body?.token ?? '';
+      if (!token) logger.warn('Login response did not include a token — authedApiClient will be unauthenticated');
+    } catch (err) {
+      logger.error('Failed to obtain auth token for authedApiClient', err);
+    }
+
+    await use(new ApiClient(ctx, env.apiBaseUrl, token));
+    await ctx.dispose();
   },
 
-  // ── Data fixtures ──────────────────────────────────────────────────────────
-
+  // ── Test data factory ────────────────────────────────────────────────────────
   factory: async ({}, use) => {
-    await use(DataFactory);
+    await use(new DataFactory());
   },
 
-  /**
-   * testUser — a fresh User object per test (not persisted, just data).
-   * Seed it via API in your test if you need it in the DB.
-   */
-  testUser: async ({}, use) => {
-    const user = DataFactory.createUser();
-    logger.debug('Generated testUser', { email: user.email });
-    await use(user);
+  // ── A fresh (unsaved) user ───────────────────────────────────────────────────
+  testUser: async ({ factory }, use) => {
+    await use(factory.createUser());
   },
 });
 
