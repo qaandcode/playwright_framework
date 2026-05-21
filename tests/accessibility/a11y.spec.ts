@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 test.describe('Accessibility @regression', () => {
   test('login page has no critical WCAG violations', async ({ page }) => {
-    await page.goto('/login');
+    await page.goto('/api/login');
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])

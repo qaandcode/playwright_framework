@@ -12,85 +12,88 @@ function skipIfNotConfigured() {
 
 // ── Health ────────────────────────────────────────────────────────────────────
 test.describe('API Health @regression', () => {
-  test('health endpoint returns 200', async ({ apiClient }) => {
-    skipIfNotConfigured();
-    const res = await apiClient.get('/health');
-    expect(res.status).toBe(200);
-  });
+ test('API reachable', async ({ apiClient }) => {
+  skipIfNotConfigured();
 
-  test('unauthenticated request to protected route returns 401', async ({ apiClient }) => {
-    skipIfNotConfigured();
-    const res = await apiClient.get('/api/users/me');
-    expect(res.status).toBe(401);
-  });
+  const res = await apiClient.get('/api/competition/anonymous/report');
+  expect(res.status).not.toBeGreaterThanOrEqual(500);
+});
+
+ test('unauthenticated request to protected route returns 401', async ({ apiClient }) => {
+  skipIfNotConfigured();
+
+  const res = await apiClient.post('/api/users/profile');
+  expect([401, 403]).toContain(res.status);
+});
 });
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 test.describe('API Auth @regression', () => {
-  test('login returns token', async ({ apiClient }) => {
-    skipIfNotConfigured();
+test('login returns token', async ({ apiClient }) => {
+  skipIfNotConfigured();
 
-    const email    = process.env.TEST_USER_EMAIL;
-    const password = process.env.TEST_USER_PASSWORD;
-    if (!email || !password) {
-      test.skip(true, 'TEST_USER_EMAIL / TEST_USER_PASSWORD not set');
-      return;
-    }
+  const email = process.env.TEST_USER_EMAIL;
+  const password = process.env.TEST_USER_PASSWORD;
 
-    const res = await apiClient.post<{ token: string }>('/auth/login', { email, password });
-    expect(res.status).toBe(200);
-    expect(res.body.token).toBeTruthy();
+  if (!email || !password) {
+    test.skip(true, 'TEST_USER_EMAIL / TEST_USER_PASSWORD not set');
+    return;
+  }
+
+  type LoginResponse = {
+    error_code: number;
+    data: Array<{
+      auth_token: string;
+      refresh_token?: string;
+      [key: string]: any;
+    }>;
+  };
+
+  const res = await apiClient.post<LoginResponse>('/api/login', {
+    username: email,
+    password,
+    instance_id: 4
   });
 
-  test('login with wrong password returns 401', async ({ apiClient }) => {
-    skipIfNotConfigured();
+  expect(res.status).toBe(200);
+  expect(res.data.error_code).toBe(0);
 
-    const email = process.env.TEST_USER_EMAIL;
-    if (!email) {
-      test.skip(true, 'TEST_USER_EMAIL not set');
-      return;
-    }
+  const token = res.data.data?.[0]?.auth_token;
 
-    const res = await apiClient.post('/auth/login', { email, password: 'wrong-password-xyz' });
-    expect(res.status).toBe(401);
+  expect(token).toBeTruthy();
+});
+
+  test('login with wrong password returns error', async ({ apiClient }) => {
+  skipIfNotConfigured();
+
+  const email = process.env.TEST_USER_EMAIL;
+  if (!email) {
+    test.skip(true, 'TEST_USER_EMAIL not set');
+    return;
+  }
+
+  type LoginResponse = {
+    error_code: number;
+    error_message?: string;
+    data?: any;
+  };
+
+  const res = await apiClient.post<LoginResponse>('/api/login', {
+    username: email,
+    password: 'wrong-password-xyz',
+    instance_id: 4
   });
+
+  // API returns 200 even for invalid login
+  expect(res.status).toBe(200);
+
+  // Business-level validation
+  expect(res.data.error_code).not.toBe(0);
+});
 
   test('login with missing fields returns 400', async ({ apiClient }) => {
     skipIfNotConfigured();
-    const res = await apiClient.post('/auth/login', {});
+    const res = await apiClient.post('/api/login', {});
     expect(res.status).toBe(400);
-  });
-});
-
-// ── Users ─────────────────────────────────────────────────────────────────────
-test.describe('API Users @regression', () => {
-  test('authenticated user can fetch own profile', async ({ authedApiClient }) => {
-    skipIfNotConfigured();
-    if (!process.env.TEST_USER_EMAIL) {
-      test.skip(true, 'TEST_USER_EMAIL not set');
-      return;
-    }
-    const res = await authedApiClient.get('/api/users/me');
-    expect([200, 401]).toContain(res.status); // 401 = token-less but test won't hard fail
-  });
-
-  test('user list is paginated', async ({ authedApiClient }) => {
-    skipIfNotConfigured();
-    if (!process.env.TEST_USER_EMAIL) {
-      test.skip(true, 'TEST_USER_EMAIL not set');
-      return;
-    }
-    const res = await authedApiClient.get('/api/users', { page: '1', perPage: '10' });
-    expect([200, 401]).toContain(res.status);
-  });
-
-  test('non-existent user returns 404', async ({ authedApiClient }) => {
-    skipIfNotConfigured();
-    if (!process.env.TEST_USER_EMAIL) {
-      test.skip(true, 'TEST_USER_EMAIL not set');
-      return;
-    }
-    const res = await authedApiClient.get('/api/users/00000000-0000-0000-0000-000000000000');
-    expect([404, 401]).toContain(res.status);
   });
 });

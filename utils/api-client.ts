@@ -8,6 +8,7 @@ import { Logger } from './logger';
 
 // ── Inline types (avoids ../types import resolution issues) ───────────────────
 interface ApiResponse<T = unknown> {
+  json(): any;
   body: any;
   status: number;
   data: T;
@@ -23,6 +24,9 @@ interface PaginatedResponse<T> {
 }
 
 export class ApiClient {
+  setToken(token: string) {
+    throw new Error('Method not implemented.');
+  }
   private readonly logger = new Logger('ApiClient');
   private authToken?: string;
 

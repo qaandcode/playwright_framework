@@ -76,14 +76,14 @@ export const test = base.extend<Fixtures>({
 
   // ── Authenticated API client ────────────────────────────────────────────────
   authedApiClient: async ({}, use) => {
-    const email    = env.userEmail();
-    const password = env.userPassword();
+    const email    = env.userEmail;
+    const password = env.userPassword;
     const ctx      = await playwrightRequest.newContext({ baseURL: env.apiBaseUrl });
     const tempClient = new ApiClient(ctx, env.apiBaseUrl);
 
     let token = '';
     try {
-      const res = await tempClient.post<{ token: string }>('/auth/login', { email, password });
+      const res = await tempClient.post<{ token: string }>('/api/login', { email, password });
       token = res.body?.token ?? '';
       if (!token) logger.warn('Login response did not include a token — authedApiClient will be unauthenticated');
     } catch (err) {
